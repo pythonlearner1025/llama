@@ -17,6 +17,8 @@ USE_CUDA = os.environ.get('USE_CUDA', False)
 if not USE_CUDA:
     import torch_xla.core.xla_model as xm
 
+from tqdm import tqdm
+
 
 class LLaMA:
 
@@ -29,6 +31,7 @@ class LLaMA:
             # TODO(alanwaketan): figure out why.
             self.model = torch.compile(self.model, fullgraph=True)
         else:
+            return
             self._generate_one_token_fn = torch.compile(
                 self._generate_one_token_fn,
                 backend="torchxla_trace_once",
@@ -138,7 +141,8 @@ class LLaMA:
             prev_pos = cur_pos
 
         assert cur_pos_tensor.item() == prev_pos + 1 and prev_pos == min_prompt_size
-        for _ in range(prev_pos + 1, total_len):
+        for i in tqdm(t:=range(prev_pos + 1, total_len)):
+            xm.master_print(f'gen tok {i}')
             tokens, input_tokens, cur_pos_tensor, input_pos_tensor, output_pos_tensor, cache_kvs \
                 = self._generate_one_token_fn(
                     tokens, input_tokens, input_text_mask, cur_pos_tensor,

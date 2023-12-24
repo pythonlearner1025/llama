@@ -144,6 +144,7 @@ def my_reduce(input_: torch.Tensor, groups, world_size, rank) -> torch.Tensor:
         input_ = torch.ops.c10d_functional.all_reduce(input_, "sum", TAG,
                                                       RANKSET, GROUP_SIZE)
     else:
+        # add all
         input_ = xm.all_reduce(xm.REDUCE_SUM, input_, groups=groups)
 
     return input_
@@ -187,6 +188,8 @@ def my_gather(input_: torch.Tensor, groups, world_size, rank) -> torch.Tensor:
                                                             padding), "sum",
                                                       TAG, RANKSET, GROUP_SIZE)
     else:
+        # sync step. 
+        # pool together input from all cores, concat along dim=-1
         output = xm.all_gather(input_, dim=-1, groups=groups)
 
     return output
@@ -229,7 +232,9 @@ def _initialize_affine_weight(
     weight_list = torch.split(master_weight,
                               per_partition_per_stride_size,
                               dim=partition_dim)
+    # gonna be len == 1
     my_weight_list = weight_list[rank::world_size]
+    assert len(my_weight_list) == 1
 
     with torch.no_grad():
         torch.cat(my_weight_list, dim=partition_dim, out=weight)
@@ -423,11 +428,13 @@ class ColumnParallelLinear(torch.nn.Module):
 
     def forward(self, input_: torch.Tensor) -> torch.Tensor:  # type: ignore
         # Set up backprop all-reduce.
+        # NOTE ignore for inference
         input_parallel = copy_to_model_parallel_region(input_, self.groups,
                                                        self.world_size,
                                                        self.rank)
         # Matrix multiply.
         if self.quant:
+                                    # input @ self.weight.T
             output_parallel = F.linear(input_parallel, self.weight, self.bias)
             output_parallel = output_parallel * self.weight_scaler
         else:

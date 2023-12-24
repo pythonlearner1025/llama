@@ -57,7 +57,7 @@ export PJRT_DEVICE=TPU
 export TOKENIZER_PATH=$HOME/llama/t5_tokenizer/spiece.model
 
 cd llama
-python3 example_xla.py --tokenizer_path $TOKENIZER_PATH --max_seq_len 256 --max_batch_size 1 --temperature 0.8 --dim 4096 --n_heads 32 --n_layers 32 --mp True
+python3 example_xla.py --tokenizer_path $TOKENIZER_PATH --max_seq_len 512 --max_batch_size 1 --temperature 0.8 --dim 4096 --n_heads 32 --n_layers 32 --mp True
 '
 ```
 

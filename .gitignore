@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# weights
+.t5_tokenizer/
+
 # Distribution / packaging
 .Python
 build/

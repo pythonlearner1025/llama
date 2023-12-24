@@ -8,7 +8,7 @@ import math
 import torch
 from torch import nn
 import torch.nn.functional as F
-
+import torch_xla.core.xla_model as xm
 from fairscale.nn.model_parallel.utils import divide_and_check_no_remainder
 
 from .xla_model_parallel import (
@@ -160,7 +160,8 @@ class Attention(nn.Module):
         cache_k, cache_v = cache_kv
         xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
 
-        xq = xq.view(bsz, seqlen, self.n_local_heads, self.head_dim)
+        # what is non local heads
+        xq = xq.view(bsz, seqlen, self.n_local_heads, self.head_dim) # last 2 dims has args.dim // world_size # of params
         xk = xk.view(bsz, seqlen, self.n_local_heads, self.head_dim)
         xv = xv.view(bsz, seqlen, self.n_local_heads, self.head_dim)
 
@@ -175,13 +176,17 @@ class Attention(nn.Module):
         xq = xq.transpose(1, 2)
         keys = keys.transpose(1, 2)
         values = values.transpose(1, 2)
+        xm.master_print(f'xq {xq.shape} keys {keys.shape} vals {values.shape}')
         scores = torch.matmul(xq, keys.transpose(2, 3)) / math.sqrt(
             self.head_dim)
+        xm.master_print(f'scores {scores.shape}') 
+        xm.master_print(f'mask {mask.shape}') # mask shape (1,1,1,512)
         scores = scores + mask  # (bs, n_local_heads, slen, max_slen)
         scores = F.softmax(scores.float(), dim=-1).type_as(xq)
         output = torch.matmul(scores,
                               values)  # (bs, n_local_heads, slen, head_dim)
         output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
+        xm.master_print(f'out {output.shape}') # (32,1,512)
 
         return self.wo(output), (cache_k, cache_v)
 
@@ -304,7 +309,7 @@ class Transformer(nn.Module):
             rank = get_model_parallel_rank()
 
         init_method = lambda x: x
-
+        # output gathered here
         self.tok_embeddings = ParallelEmbedding(params.vocab_size,
                                                 params.dim,
                                                 init_method=init_method,
@@ -331,6 +336,7 @@ class Transformer(nn.Module):
             self.cache_kvs.append((cache_k, cache_v))
 
         self.norm = RMSNorm(params.dim, eps=params.norm_eps)
+        # output gathered here
         self.output = ColumnParallelLinear(params.dim,
                                            params.vocab_size,
                                            bias=False,

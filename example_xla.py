@@ -109,7 +109,6 @@ def main(
     generator = load(ckpt_dir, tokenizer_path,
                      rank, world_size, max_seq_len, max_batch_size,
                      xm.xla_device(), dim, n_layers, n_heads, quant)
-
     prompts = [
         # For these prompts, the expected answer is the natural continuation of the prompt
         "I believe the meaning of life is",
@@ -137,17 +136,17 @@ def main(
         #
         #cheese =>""",
     ]
-    for _ in range(2):
-        with torch.no_grad():
-            results = generator.generate(prompts,
-                                         256,
-                                         xm.xla_device(),
-                                         temperature=temperature,
-                                         top_p=top_p)
-
-        for result in results:
-            print(result)
-            print("\n==================================\n")
+    with torch.no_grad():
+        xm.master_print('generating...')
+        results = generator.generate(prompts,
+                                        256,
+                                        xm.xla_device(),
+                                        temperature=temperature,
+                                        top_p=top_p)
+    xm.master_print('got results:') 
+    for result in results:
+        xm.master_print(result)
+        xm.master_print("\n==================================\n")
 
 
 def _fn(
@@ -168,8 +167,8 @@ def _fn(
 
 
 def mp_main(
-    mp: bool,
-    tokenizer_path: str,
+    mp: bool = True,
+    tokenizer_path: str = '/home/minjunes/llama/t5_tokenizer/spiece.model',
     temperature: float = 0.8,
     top_p: float = 0.95,
     max_seq_len: int = 512,
@@ -189,6 +188,8 @@ def mp_main(
         main(tokenizer_path, temperature, top_p, max_seq_len, max_batch_size,
              ckpt_dir, dim, n_layers, n_heads, quant)
 
-
+'''
+python3 example_xla.py 
+'''
 if __name__ == "__main__":
     fire.Fire(mp_main)
