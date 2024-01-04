@@ -292,7 +292,6 @@ class TransformerBlock(nn.Module):
 
 
 class Transformer(nn.Module):
-
     def __init__(self,
                  params: ModelArgs,
                  world_size: Optional[int] = None,

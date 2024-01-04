@@ -73,18 +73,16 @@ def load(
                                       **params)
     tokenizer = Tokenizer(model_path=tokenizer_path)
     model_args.vocab_size = tokenizer.n_words
-    if USE_CUDA:
-        torch.set_default_tensor_type(torch.cuda.HalfTensor)
-    else:
-        torch.set_default_tensor_type(torch.BFloat16Tensor)
+    torch.set_default_tensor_type(torch.BFloat16Tensor)
     model = Transformer(model_args)
     if ckpt_dir:
         model.load_state_dict(checkpoint, strict=False)
+    xm.master_print(f'wq dev type {model.layers[0].attention.wq.weight.device}')   
     model = model.to(device)
     for i in range(len(model.cache_kvs)):
         model.cache_kvs[i] = tuple(t.to(device) for t in model.cache_kvs[i])
     torch.set_default_tensor_type(torch.FloatTensor)
-
+    xm.master_print(f'wq dev type {model.layers[0].attention.wq.weight.device}')   
     generator = LLaMA(model, tokenizer)
     print(f"Loaded in {time.time() - start_time:.2f} seconds")
     return generator
@@ -192,4 +190,5 @@ def mp_main(
 python3 example_xla.py 
 '''
 if __name__ == "__main__":
+    os.environ['PJRT_DEVICE'] = 'TPU'
     fire.Fire(mp_main)
